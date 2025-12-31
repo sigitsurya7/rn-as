@@ -1,0 +1,7 @@
+{
+  "name": "NativeBotService",
+  "platforms": ["android"],
+  "android": {
+    "moduleClassName": "expo.modules.nativebot.NativeBotServiceModule"
+  }
+}

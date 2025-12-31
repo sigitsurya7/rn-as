@@ -1,0 +1,458 @@
+[
+  {
+    "ric": "Z-AUD/USD2",
+    "name": "AUD/USD (OTC)"
+  },
+  {
+    "ric": "Z-USD/CAD2",
+    "name": "USD/CAD (OTC)"
+  },
+  {
+    "ric": "AUDZAR",
+    "name": "AUD/ZAR"
+  },
+  {
+    "ric": "NFLX",
+    "name": "Netflix"
+  },
+  {
+    "ric": "Z-GBP/USD2",
+    "name": "GBP/USD (OTC)"
+  },
+  {
+    "ric": "AAPL",
+    "name": "Apple"
+  },
+  {
+    "ric": "V",
+    "name": "Visa"
+  },
+  {
+    "ric": "EURHUF",
+    "name": "EUR/HUF"
+  },
+  {
+    "ric": "CADJPY",
+    "name": "CAD/JPY"
+  },
+  {
+    "ric": "MSFT",
+    "name": "Microsoft"
+  },
+  {
+    "ric": "CADDKK",
+    "name": "CAD/DKK"
+  },
+  {
+    "ric": "TSLA",
+    "name": "Tesla"
+  },
+  {
+    "ric": "EURILS",
+    "name": "EUR/ILS"
+  },
+  {
+    "ric": "EURZAR",
+    "name": "EUR/ZAR"
+  },
+  {
+    "ric": "EUR/NZD-AFX",
+    "name": "EUR/NZD"
+  },
+  {
+    "ric": "MCD",
+    "name": "McDonalds"
+  },
+  {
+    "ric": "BA",
+    "name": "Boeing"
+  },
+  {
+    "ric": "C",
+    "name": "CitiGroup"
+  },
+  {
+    "ric": "COKE",
+    "name": "Coca Cola"
+  },
+  {
+    "ric": "EURNOK",
+    "name": "EUR/NOK"
+  },
+  {
+    "ric": "CADMXN",
+    "name": "CAD/MXN"
+  },
+  {
+    "ric": "EUR/MXN-AFX",
+    "name": "EUR/MXN"
+  },
+  {
+    "ric": "Z-CRY/IDX",
+    "name": "Crypto IDX"
+  },
+  {
+    "ric": "AIG",
+    "name": "US International Group"
+  },
+  {
+    "ric": "CADNOK",
+    "name": "CAD/NOK"
+  },
+  {
+    "ric": "NDX",
+    "name": "NASDAQ 100"
+  },
+  {
+    "ric": "Z-NZD/USD2",
+    "name": "NZD/USD (OTC)"
+  },
+  {
+    "ric": "CADSEK",
+    "name": "CAD/SEK"
+  },
+  {
+    "ric": "EURPLN",
+    "name": "EUR/PLN"
+  },
+  {
+    "ric": "NZDCAD",
+    "name": "NZD/CAD"
+  },
+  {
+    "ric": "CADSGD",
+    "name": "CAD/SGD"
+  },
+  {
+    "ric": "YUM",
+    "name": "Yum Brands"
+  },
+  {
+    "ric": "XAU/USD-HSFX",
+    "name": "Gold"
+  },
+  {
+    "ric": "Z-GBP/CHF2",
+    "name": "GBP/CHF (OTC)"
+  },
+  {
+    "ric": "AUDSGD",
+    "name": "AUD/SGD"
+  },
+  {
+    "ric": "EURSEK",
+    "name": "EUR/SEK"
+  },
+  {
+    "ric": "EURX-DXF",
+    "name": "EUR IDX"
+  },
+  {
+    "ric": "PYPL",
+    "name": "PayPal"
+  },
+  {
+    "ric": "CHFDKK",
+    "name": "CHF/DKK"
+  },
+  {
+    "ric": "AUDDKK",
+    "name": "AUD/DKK"
+  },
+  {
+    "ric": "EURSGD",
+    "name": "EUR/SGD"
+  },
+  {
+    "ric": "EURO",
+    "name": "EUR/USD"
+  },
+  {
+    "ric": "LTC/USD-CXDXF",
+    "name": "Litecoin"
+  },
+  {
+    "ric": "EUR/CHF-AFX-CFH2",
+    "name": "EUR/CHF"
+  },
+  {
+    "ric": "AUDHUF",
+    "name": "AUD/HUF"
+  },
+  {
+    "ric": "BABA",
+    "name": "Alibaba"
+  },
+  {
+    "ric": "CHFHUF",
+    "name": "CHF/HUF"
+  },
+  {
+    "ric": "GBPCZK",
+    "name": "GBP/CZK"
+  },
+  {
+    "ric": "USD/JPY-DXF",
+    "name": "USD/JPY "
+  },
+  {
+    "ric": "GBPDKK",
+    "name": "GBP/DKK"
+  },
+  {
+    "ric": "CHFNOK",
+    "name": "CHF/NOK"
+  },
+  {
+    "ric": "AUDNOK",
+    "name": "AUD/NOK"
+  },
+  {
+    "ric": "Z-CHF/JPY2",
+    "name": "CHF/JPY (OTC)"
+  },
+  {
+    "ric": "ETHUSD",
+    "name": "Ethereum"
+  },
+  {
+    "ric": "AUDSEK",
+    "name": "AUD/SEK"
+  },
+  {
+    "ric": "EBAY",
+    "name": "eBay"
+  },
+  {
+    "ric": "BTCUSD",
+    "name": "Bitcoin"
+  },
+  {
+    "ric": "CHFPLN",
+    "name": "CHF/PLN"
+  },
+  {
+    "ric": "Z-GBP/JPY2",
+    "name": "GBP/JPY (OTC)"
+  },
+  {
+    "ric": "JPM",
+    "name": "JPMorgan C"
+  },
+  {
+    "ric": "SBUX",
+    "name": "Starbucks"
+  },
+  {
+    "ric": "CHFSEK",
+    "name": "CHF/SEK"
+  },
+  {
+    "ric": "XAG/USD-AFX",
+    "name": "Silver"
+  },
+  {
+    "ric": "INDU",
+    "name": "Dow Jones IA"
+  },
+  {
+    "ric": "Z-EUR/CAD2",
+    "name": "EUR/CAD (OTC)"
+  },
+  {
+    "ric": "UNIUSD",
+    "name": "Uniswap"
+  },
+  {
+    "ric": "LNKUSD",
+    "name": "Chainlink"
+  },
+  {
+    "ric": "CHFSGD",
+    "name": "CHF/SGD"
+  },
+  {
+    "ric": "AAVUSD",
+    "name": "Aave"
+  },
+  {
+    "ric": "META",
+    "name": "Meta"
+  },
+  {
+    "ric": "ADA/USD-CXDXF",
+    "name": "Cordano"
+  },
+  {
+    "ric": "Z-EUR/GBP2",
+    "name": "EUR/GBP (OTC)"
+  },
+  {
+    "ric": "CHFZAR",
+    "name": "CHF/ZAR"
+  },
+  {
+    "ric": "BCHUSD",
+    "name": "Bitcoin Cash"
+  },
+  {
+    "ric": "GBP/NZD-AFX",
+    "name": "GBP/NZD"
+  },
+  {
+    "ric": "SOLUSD",
+    "name": "Solana"
+  },
+  {
+    "ric": "CAC",
+    "name": "French CAC 40 Index"
+  },
+  {
+    "ric": "TONUSD",
+    "name": "Toncoin"
+  },
+  {
+    "ric": "BARUSD",
+    "name": "FC Barcelona Fan Token"
+  },
+  {
+    "ric": "QCOM",
+    "name": "Qualcomm"
+  },
+  {
+    "ric": "WB",
+    "name": "Weibo"
+  },
+  {
+    "ric": "Z-USD/JPY2",
+    "name": "USD/JPY (OTC)"
+  },
+  {
+    "ric": "Z-EUR/USD2",
+    "name": "EUR/USD (OTC)"
+  },
+  {
+    "ric": "Z-AUD/CAD2",
+    "name": "AUD/CAD (OTC)"
+  },
+  {
+    "ric": "CAKUSD",
+    "name": "Pancake Swap"
+  },
+  {
+    "ric": "WOOUSD",
+    "name": "WOO Network"
+  },
+  {
+    "ric": "RACE",
+    "name": "Ferrari"
+  },
+  {
+    "ric": "GOOG",
+    "name": "Google"
+  },
+  {
+    "ric": "FETUSD",
+    "name": "Fetch.ai"
+  },
+  {
+    "ric": "NVDA",
+    "name": "Nvidia"
+  },
+  {
+    "ric": "SPX/USD-BFX",
+    "name": "SPX/USD (OTC)"
+  },
+  {
+    "ric": "DJI/USD-BFX",
+    "name": "Dow Jones Index (OTC)"
+  },
+  {
+    "ric": "ICPUSD",
+    "name": "Internet Computer"
+  },
+  {
+    "ric": "KSMUSD",
+    "name": "Kusama"
+  },
+  {
+    "ric": "RSRUSD",
+    "name": "Reserve Rights"
+  },
+  {
+    "ric": "LPTUSD",
+    "name": "Livepeer"
+  },
+  {
+    "ric": "VECUSD",
+    "name": "Vector"
+  },
+  {
+    "ric": "GBP/USD-DXF",
+    "name": "GBP/USD"
+  },
+  {
+    "ric": "EUR/AUD-AFX-CFH2",
+    "name": "EUR/AUD"
+  },
+  {
+    "ric": "IWM",
+    "name": "iShares Russell 2000 ETF"
+  },
+  {
+    "ric": "QQQ",
+    "name": "Invesco Nasdaq 100 ETF"
+  },
+  {
+    "ric": "NZDCHF",
+    "name": "NZD/CHF"
+  },
+  {
+    "ric": "TQQQ",
+    "name": "ProShares UltraPro QQQ"
+  },
+  {
+    "ric": "USO/USD-AFX",
+    "name": "Oil"
+  },
+  {
+    "ric": "GBP/CHF-AFX",
+    "name": "GBP/CHF"
+  },
+  {
+    "ric": "GBPCAD",
+    "name": "GBP/CAD"
+  },
+  {
+    "ric": "DAX/EUR-BFX",
+    "name": "German DAX Index (OTC)"
+  },
+  {
+    "ric": "AUD/NZD-AFX",
+    "name": "AUD/NZD"
+  },
+  {
+    "ric": "NDX/USD-BFX",
+    "name": "NDX/USD (OTC)"
+  },
+  {
+    "ric": "AUDCHF",
+    "name": "AUD/CHF"
+  },
+  {
+    "ric": "INTC",
+    "name": "Intel"
+  },
+  {
+    "ric": "VOD",
+    "name": "Vodafone"
+  },
+  {
+    "ric": "Z-GBP/NZD2",
+    "name": "GBP/NZD (OTC)"
+  },
+  {
+    "ric": "EUR/HKD-AFX-CFH2",
+    "name": "EUR/HKD"
+  }
+]

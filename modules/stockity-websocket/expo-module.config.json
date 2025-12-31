@@ -1,0 +1,10 @@
+{
+  "name": "StockityWebSocket",
+  "platforms": ["ios", "android"],
+  "ios": {
+    "moduleClassName": "StockityWebSocketModule"
+  },
+  "android": {
+    "moduleClassName": "expo.modules.stockitywebsocket.StockityWebSocketModule"
+  }
+}

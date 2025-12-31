@@ -1,0 +1,7 @@
+{
+  "name": "ForegroundService",
+  "platforms": ["android"],
+  "android": {
+    "moduleClassName": "expo.modules.foregroundservice.ForegroundServiceModule"
+  }
+}
