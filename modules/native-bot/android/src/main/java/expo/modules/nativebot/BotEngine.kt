@@ -67,6 +67,7 @@ object BotEngine {
   private var cooldownMax = 5
   private var bidInFlightUntil = 0L
   private var flashInitialSent = false
+  private var fastInitialSent = false
   private var switchDemoActive = false
   private var switchDemoStep: Int? = null
   private var switchDemoReturnWallet: String? = null
@@ -93,6 +94,7 @@ object BotEngine {
     running = true
     parsePayload(payload)
     flashInitialSent = false
+    fastInitialSent = false
     switchDemoActive = false
     switchDemoStep = null
     disableRepeatAfterDemo = false
@@ -104,6 +106,7 @@ object BotEngine {
     currentWalletType = config.optString("walletType", "demo").lowercase()
     emitStatus("starting", "Menyiapkan bot...")
     connectSockets()
+    scheduler.execute { refreshProfitFromApi("start") }
     scheduleStrategy()
     maybeStartFlashInitialBid()
   }
@@ -181,6 +184,14 @@ object BotEngine {
 
         override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
           emitError("WS error: ${t.message ?: "unknown"}")
+          if (includeRefs) {
+            streamConnected = false
+            streamReady = false
+          } else {
+            tradeConnected = false
+            tradeReady = false
+          }
+          emitWsStatus()
           if (running) {
             scheduler.schedule({ reconnect() }, 2, TimeUnit.SECONDS)
           }
@@ -188,6 +199,14 @@ object BotEngine {
 
         override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
           emitError("WS closed ($code): $reason")
+          if (includeRefs) {
+            streamConnected = false
+            streamReady = false
+          } else {
+            tradeConnected = false
+            tradeReady = false
+          }
+          emitWsStatus()
           if (running) {
             scheduler.schedule({ reconnect() }, 2, TimeUnit.SECONDS)
           }
@@ -260,6 +279,7 @@ object BotEngine {
         socket.send(JSONObject().put("action", "subscribe").put("rics", JSONArray().put(asset)).toString())
       }
       emitLog("WS join finished: ${if (includeRefs) "stream" else "trade"}")
+      maybeStartFastInitialBid()
       maybeStartFlashInitialBid()
     }
   }
@@ -271,6 +291,37 @@ object BotEngine {
     flashInitialSent = true
     emitLog("Flash 5st: initial bid buy after WS ready.")
     sendBid("call")
+  }
+
+  private fun maybeStartFastInitialBid() {
+    if (config.optString("strategy") != "Fast") return
+    if (fastInitialSent) return
+    if (!tradeReady || !streamReady) return
+    fastInitialSent = true
+    emitLog("Fast: initial bid after WS ready.")
+    try {
+      val trend = computeTrend()
+      if (trend == null) {
+        emitLog("Fast: no trend, skip initial bid.")
+        return
+      }
+      sendBid(trend, true)
+    } catch (err: Exception) {
+      emitError("Fast initial bid error: ${err.message ?: "unknown"}")
+    }
+  }
+
+  private fun queueBidAtSecondZero(trend: String, bypassInterval: Boolean = false) {
+    val now = System.currentTimeMillis()
+    val seconds = (now / 1000) % 60
+    if (seconds == 0L) {
+      sendBid(trend, bypassInterval)
+      return
+    }
+    val delay = 60_000L - (seconds * 1000 + (now % 1000))
+    emitLog("Aligning bid to detik 00 in ${delay}ms")
+    val task = scheduler.schedule({ sendBid(trend, bypassInterval) }, delay, TimeUnit.MILLISECONDS)
+    timers.add(task)
   }
 
   private fun scheduleHeartbeat() {
@@ -296,7 +347,7 @@ object BotEngine {
         }
         ws.send(ping.toString())
       }
-    }, 120, 120, TimeUnit.SECONDS)
+    }, 60, 60, TimeUnit.SECONDS)
     timers.add(task)
   }
 
@@ -306,7 +357,19 @@ object BotEngine {
       scheduleSignals()
       return
     }
+    if (strategy.equals("Fast", ignoreCase = true)) {
+      scheduleFastStrategy()
+      return
+    }
     scheduleIndicatorStrategy()
+  }
+
+  private fun scheduleFastStrategy() {
+    if (fastInitialSent) return
+    val task = scheduler.schedule({
+      maybeStartFastInitialBid()
+    }, 0, TimeUnit.MILLISECONDS)
+    timers.add(task)
   }
 
   private fun scheduleSignals() {
@@ -329,38 +392,64 @@ object BotEngine {
         target = target.plusDays(1)
       }
       val delay = target.toInstant().toEpochMilli() - System.currentTimeMillis()
-      val task = scheduler.schedule({ sendBid(trend) }, delay, TimeUnit.MILLISECONDS)
+      val task = scheduler.schedule({ queueBidAtSecondZero(trend) }, delay, TimeUnit.MILLISECONDS)
       timers.add(task)
     }
   }
 
   private fun scheduleIndicatorStrategy() {
     val intervalMinutes = max(1, config.optString("interval", "1").toIntOrNull() ?: 1)
-    val isFlash = config.optString("strategy") == "Flash 5st"
-    val periodSeconds = if (isFlash) 5L else intervalMinutes.toLong() * 60L
-    val initialDelaySeconds = if (isFlash) {
-      5L
-    } else {
-      val nowSec = System.currentTimeMillis() / 1000
-      val untilNextMinute = 60L - (nowSec % 60L)
-      if (untilNextMinute == 60L) 60L else untilNextMinute
+    val strategy = config.optString("strategy")
+    val isFlash = strategy == "Flash 5st"
+    val isCooldownStrategy = strategy == "Momentum" || isFlash
+
+    fun msUntilIntervalBoundary(interval: Int): Long {
+      val minuteMs = 60_000L
+      val intervalMs = max(1, interval).toLong() * minuteMs
+      val now = System.currentTimeMillis()
+      val next = (now / minuteMs) * minuteMs + intervalMs
+      return max(0, next - now)
     }
-    val task = scheduler.scheduleAtFixedRate({
-      if (!running) return@scheduleAtFixedRate
-      if (cooldownActive) {
-        cooldownCount += 1
-        if (cooldownCount >= cooldownMax) {
-          cooldownActive = false
-          cooldownCount = 0
+
+    lateinit var runTick: () -> Unit
+    val scheduleNext: (Long) -> Unit = { delayMs ->
+      val task = scheduler.schedule({ runTick() }, delayMs, TimeUnit.MILLISECONDS)
+      timers.add(task)
+    }
+
+    runTick = {
+      try {
+        if (!running) return@runTick
+        if (isCooldownStrategy && cooldownActive) {
+          cooldownCount += 1
+          if (cooldownCount >= cooldownMax) {
+            cooldownActive = false
+            cooldownCount = 0
+          }
+          scheduleNext(if (isFlash) 5_000L else 60_000L)
+          return@runTick
         }
-        return@scheduleAtFixedRate
+        val trend = computeTrend()
+        if (trend != null) {
+          if (strategy == "Momentum") {
+            queueBidAtSecondZero(trend)
+          } else {
+            sendBid(trend)
+          }
+        } else {
+          emitLog("Tidak ada trend yang memenuhi, skip bid.")
+        }
+      } finally {
+        if (!running) return@runTick
+        if (isFlash) {
+          scheduleNext(5_000L)
+        } else {
+          scheduleNext(msUntilIntervalBoundary(intervalMinutes))
+        }
       }
-      val trend = computeTrend()
-      if (trend != null) {
-        sendBid(trend)
-      }
-    }, initialDelaySeconds, periodSeconds, TimeUnit.SECONDS)
-    timers.add(task)
+    }
+
+    scheduleNext(if (isFlash) 5_000L else msUntilIntervalBoundary(intervalMinutes))
   }
 
   private fun computeTrend(): String? {
@@ -415,7 +504,7 @@ object BotEngine {
         if (bandWidth <= eps) {
           return if (lastClose > lastOpen) "call"
           else if (lastClose < lastOpen) "put"
-          else lastSignalTrend
+          else lastSignalTrend ?: lastFastBidTrend
         }
         if (prevClose <= boll.lower + eps && lastClose >= boll.lower + eps && lastClose > lastOpen) {
           "call"
@@ -473,6 +562,7 @@ object BotEngine {
       emitLog("Skip bid: bot tidak berjalan.")
       return
     }
+    emitRefresh("bid")
     val now = System.currentTimeMillis()
     if (!config.optString("strategy", "Signal").equals("Signal", ignoreCase = true) && !bypassInterval) {
       val intervalMinutes = max(1, config.optString("interval", "1").toIntOrNull() ?: 1)
@@ -663,13 +753,6 @@ object BotEngine {
 
     matching.forEach { bid ->
       val result = resolveOutcome(bid.trend, bid.openRate, endRate)
-      val dealInfo = findBatchDealInfo(payload, bid) ?: payload
-      val won = if (dealInfo.has("won")) dealInfo.optDouble("won")
-        else if (dealInfo.has("payment")) dealInfo.optDouble("payment")
-        else if (dealInfo.has("win")) dealInfo.optDouble("win")
-        else null
-      val amountOverride = if (dealInfo.has("amount")) dealInfo.optDouble("amount") else null
-      val profitDelta = calculateProfitDelta(bid, result, won, amountOverride)
       if (result == "win") {
         if (switchDemoActive) {
           switchDemoActive = false
@@ -717,21 +800,14 @@ object BotEngine {
           }
         }
       }
-      if (bid.dealType == "real") {
-        profitReal += profitDelta
-        totalProfit = profitReal
-      } else {
-        profitDemo += profitDelta
-        totalProfit = profitDemo
-      }
-      applyRiskRules()
-      sendStreamPing("tracked_profit")
       if (running && config.optString("strategy") == "Fast") {
-        scheduler.execute {
-          val trend = computeTrend() ?: bid.trend
-          sendBid(trend, true)
-        }
+        queueFastReentry(bid.trend)
       }
+    }
+    scheduler.execute {
+      refreshProfitFromApi("close_deal_batch")
+      emitRefresh("tracked_profit")
+      applyRiskRules()
     }
   }
 
@@ -779,6 +855,119 @@ object BotEngine {
     if (result == "loss") return -amount
     if (won != null && won.isFinite()) return won - amount
     return (bid.payment ?: amount) - amount
+  }
+
+  private fun queueFastReentry(fallbackTrend: String) {
+    if (!running) return
+    scheduler.execute {
+      try {
+        val trend = computeTrend()
+        val maxStep = config.optString("maxMartingale", "0").toIntOrNull() ?: 0
+        val canRepeat = maxStep > 0 && repeatStep > 0
+        if (trend == null) {
+          if (!canRepeat) return@execute
+          val fallback = lastSignalTrend ?: lastFastBidTrend ?: fallbackTrend
+          if (fallback.isNullOrEmpty()) return@execute
+          sendBid(fallback, true)
+          return@execute
+        }
+        sendBid(trend, true)
+      } catch (err: Exception) {
+        emitError("Fast reentry failed: ${err.message ?: "unknown"}")
+      }
+    }
+  }
+
+  private fun extractDeals(payload: JSONObject): JSONArray? {
+    val data = payload.optJSONObject("data")
+    return data?.optJSONArray("standard_trade_deals")
+      ?: payload.optJSONArray("standard_trade_deals")
+      ?: data?.optJSONArray("deals")
+      ?: payload.optJSONArray("deals")
+  }
+
+  private fun getDealDateKey(deal: JSONObject): String? {
+    val raw = deal.optString("close_quote_created_at").ifEmpty { deal.optString("created_at") }
+    if (raw.isEmpty()) return null
+    return try {
+      Instant.parse(raw).atZone(ZoneOffset.UTC).toLocalDate().toString()
+    } catch (_: Exception) {
+      try {
+        java.time.OffsetDateTime.parse(raw).toLocalDate().toString()
+      } catch (_: Exception) {
+        if (raw.length >= 10) raw.substring(0, 10) else null
+      }
+    }
+  }
+
+  private fun optDoubleOrNull(deal: JSONObject, key: String): Double? {
+    if (!deal.has(key) || deal.isNull(key)) return null
+    return deal.optDouble(key)
+  }
+
+  private fun getDealProfitDelta(deal: JSONObject): Double? {
+    val amount = optDoubleOrNull(deal, "amount") ?: 0.0
+    val winValue = optDoubleOrNull(deal, "won")
+      ?: optDoubleOrNull(deal, "win")
+      ?: optDoubleOrNull(deal, "payment")
+    if (winValue == null || !winValue.isFinite()) return null
+    return winValue - amount
+  }
+
+  private fun refreshProfitFromApi(reason: String? = null) {
+    val today = DateTimeFormatter.ISO_LOCAL_DATE.withZone(ZoneOffset.UTC).format(Instant.now())
+    var demoTotal = 0.0
+    var realTotal = 0.0
+    try {
+      val demoDeals = fetchDeals("demo")
+      if (demoDeals != null) {
+        for (i in 0 until demoDeals.length()) {
+          val deal = demoDeals.optJSONObject(i) ?: continue
+          if (deal.optString("status").lowercase() == "opened") continue
+          if (getDealDateKey(deal) != today) continue
+          val delta = getDealProfitDelta(deal) ?: continue
+          demoTotal += delta
+        }
+      }
+
+      val realDeals = fetchDeals("real")
+      if (realDeals != null) {
+        for (i in 0 until realDeals.length()) {
+          val deal = realDeals.optJSONObject(i) ?: continue
+          if (deal.optString("status").lowercase() == "opened") continue
+          if (getDealDateKey(deal) != today) continue
+          val delta = getDealProfitDelta(deal) ?: continue
+          realTotal += delta
+        }
+      }
+
+      profitDemo = demoTotal
+      profitReal = realTotal
+      totalProfit = demoTotal + realTotal
+      if (reason != null) {
+        emitLog("Tracked profit ($reason): real=$realTotal demo=$demoTotal")
+      }
+      sendStreamPing("tracked_profit")
+    } catch (err: Exception) {
+      emitError("Error refreshing profit: ${err.message ?: "unknown"}")
+    }
+  }
+
+  private fun fetchDeals(type: String): JSONArray? {
+    val url = "$apiUrl/bo-deals-history/v3/deals/trade?type=$type"
+    val request = Request.Builder()
+      .url(url)
+      .addHeader("Authorization-Token", tokenApi)
+      .build()
+    return try {
+      httpClient.newCall(request).execute().use { response ->
+        val body = response.body?.string() ?: return null
+        val json = JSONObject(body)
+        extractDeals(json)
+      }
+    } catch (_: IOException) {
+      null
+    }
   }
 
   private fun sendStreamPing(reason: String) {
@@ -920,5 +1109,9 @@ object BotEngine {
 
   private fun emitError(message: String) {
     BotEventBus.emit("error", JSONObject().put("message", message).toString())
+  }
+
+  private fun emitRefresh(reason: String) {
+    BotEventBus.emit("refresh", JSONObject().put("reason", reason).toString())
   }
 }
