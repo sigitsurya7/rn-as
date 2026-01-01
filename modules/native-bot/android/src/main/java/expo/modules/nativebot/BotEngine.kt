@@ -55,6 +55,7 @@ object BotEngine {
   private var repeatStep = 0
   private var lastSignalTrend: String? = null
   private var lastFastBidTrend: String? = null
+  private var fastRepeatTrend: String? = null
   private var momentumNoSignalSince: Long? = null
   private var totalProfit = 0.0
 
@@ -68,6 +69,7 @@ object BotEngine {
   private var bidInFlightUntil = 0L
   private var flashInitialSent = false
   private var fastInitialSent = false
+  private var fastCandleLogScheduled = false
   private var switchDemoActive = false
   private var switchDemoStep: Int? = null
   private var switchDemoReturnWallet: String? = null
@@ -95,6 +97,8 @@ object BotEngine {
     parsePayload(payload)
     flashInitialSent = false
     fastInitialSent = false
+    fastCandleLogScheduled = false
+    fastRepeatTrend = null
     switchDemoActive = false
     switchDemoStep = null
     disableRepeatAfterDemo = false
@@ -366,9 +370,37 @@ object BotEngine {
 
   private fun scheduleFastStrategy() {
     if (fastInitialSent) return
+    scheduleFastCandleLog()
     val task = scheduler.schedule({
       maybeStartFastInitialBid()
     }, 0, TimeUnit.MILLISECONDS)
+    timers.add(task)
+  }
+
+  private fun scheduleFastCandleLog() {
+    if (fastCandleLogScheduled) return
+    fastCandleLogScheduled = true
+    val now = System.currentTimeMillis()
+    val seconds = (now / 1000) % 60
+    val millis = now % 1000
+    val secondsTo59 = (59 - seconds + 60) % 60
+    var delay = secondsTo59 * 1000 - millis
+    if (delay < 0) delay += 60_000
+    val task = scheduler.scheduleAtFixedRate({
+      if (!running || config.optString("strategy") != "Fast") return@scheduleAtFixedRate
+      val candles = fetchCandles(config.optString("asset", "Z-CRY/IDX"), 60)
+      if (candles.isNotEmpty()) {
+        val last = candles.last()
+        val color = when {
+          last.second > last.first -> "hijau"
+          last.second < last.first -> "merah"
+          else -> "doji"
+        }
+        emitLog("Fast candle @:59 $color")
+      } else {
+        emitLog("Fast candle @:59 no data")
+      }
+    }, delay, 60_000, TimeUnit.MILLISECONDS)
     timers.add(task)
   }
 
@@ -522,7 +554,16 @@ object BotEngine {
         val last = candles[candles.size - 1]
         if (last.second > last.first) "call"
         else if (last.second < last.first) "put"
-        else lastFastBidTrend ?: lastSignalTrend
+        else {
+          val prev = if (candles.size > 1) candles[candles.size - 2] else null
+          if (prev != null && prev.second > prev.first) {
+            "call"
+          } else if (prev != null && prev.second < prev.first) {
+            "put"
+          } else {
+            lastFastBidTrend ?: lastSignalTrend
+          }
+        }
       }
     }
   }
@@ -589,12 +630,17 @@ object BotEngine {
     val strategy = config.optString("strategy")
     val isDemoMode = forceDemo || currentWalletType == "demo" || switchDemoActive || disableRepeatAfterDemo
     val trendToSend = if (strategy == "Fast") {
-      val canRepeatFast = canRepeat && !isDemoMode
-      if (canRepeatFast && lastSignalTrend != null) {
-        lastSignalTrend!!
+      if (!isDemoMode && fastRepeatTrend != null) {
+        lastSignalTrend = fastRepeatTrend
+        fastRepeatTrend!!
       } else {
-        lastSignalTrend = trend
-        trend
+        val canRepeatFast = canRepeat && !isDemoMode
+        if (canRepeatFast && lastSignalTrend != null) {
+          lastSignalTrend!!
+        } else {
+          lastSignalTrend = trend
+          trend
+        }
       }
     } else if (canRepeat && lastSignalTrend != null) {
       lastSignalTrend!!
@@ -753,6 +799,10 @@ object BotEngine {
 
     matching.forEach { bid ->
       val result = resolveOutcome(bid.trend, bid.openRate, endRate)
+      val isDemoMode = forceDemo || currentWalletType == "demo" || switchDemoActive || disableRepeatAfterDemo
+      if (config.optString("strategy") == "Fast") {
+        fastRepeatTrend = if (!isDemoMode && result == "win") bid.trend else null
+      }
       if (result == "win") {
         if (switchDemoActive) {
           switchDemoActive = false

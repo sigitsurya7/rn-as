@@ -1057,7 +1057,7 @@ export default function TradingScreen() {
                     ) : null}
                   </View>
                   <View style={styles.fieldInline}>
-                    <Text style={styles.label}>Martingale Maks</Text>
+                    <Text style={styles.label}>Maks Martingale</Text>
                     <Pressable
                       style={styles.selectBox}
                       onPress={() =>

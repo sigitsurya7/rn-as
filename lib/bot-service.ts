@@ -137,10 +137,12 @@ class BotService {
   private nativeEnabled = nativeBotAvailable();
   private nativeEventsSubscribed = false;
   private lastFastBidTrend: Trend | null = null;
+  private fastRepeatTrend: Trend | null = null;
   private momentumNoSignalSince: number | null = null;
   private bidInFlightUntil: number | null = null;
   private flashInitialSent = false;
   private fastInitialSent = false;
+  private fastCandleLogScheduled = false;
   private switchDemoActive = false;
   private switchDemoStep: number | null = null;
   private switchDemoReturnWallet: 'real' | 'demo' | null = null;
@@ -254,6 +256,7 @@ class BotService {
 
   async start(config: TradeConfig, resumeState?: ResumeState | null) {
     if (this.status === 'running' || this.status === 'starting') return;
+    console.clear();
     this.setStatus('starting', 'Menyiapkan bot...');
     if (this.nativeEnabled) {
       this.subscribeNativeEvents();
@@ -306,10 +309,12 @@ class BotService {
     this.repeatStep = 0;
     this.lastSignalTrend = resumeState ? this.lastSignalTrend : null;
     this.lastFastBidTrend = this.lastSignalTrend;
+    this.fastRepeatTrend = null;
     this.momentumNoSignalSince = null;
     this.bidInFlightUntil = null;
     this.flashInitialSent = false;
     this.fastInitialSent = false;
+    this.fastCandleLogScheduled = false;
     this.skipStopLossOnce = false;
     this.disconnecting = false;
     this.switchDemoActive = false;
@@ -374,8 +379,15 @@ class BotService {
 
   stop(message = 'Bot dihentikan') {
     if (this.nativeEnabled) {
-      stopNativeBot().catch(() => undefined);
-      this.setStatus('stopped', message);
+      stopNativeBot()
+        .then(() => {
+          this.setStatus('stopped', message);
+        })
+        .catch((err) => {
+          const reason = err instanceof Error ? err.message : String(err);
+          this.emit('error', { message: `Gagal menghentikan bot native: ${reason}` });
+          this.setStatus('error', 'Gagal menghentikan bot native.');
+        });
       return;
     }
     this.setStatus('stopped', message);
@@ -803,6 +815,18 @@ class BotService {
 
     for (const bid of matching) {
       const result = this.resolveOutcome(bid.trend, bid.openRate, endRate);
+      const isDemoMode =
+        this.forceDemo ||
+        this.currentWalletType === 'demo' ||
+        this.switchDemoActive ||
+        this.disableRepeatAfterDemo;
+      if (this.config.strategy === 'Fast') {
+        if (!isDemoMode && result === 'win') {
+          this.fastRepeatTrend = bid.trend;
+        } else {
+          this.fastRepeatTrend = null;
+        }
+      }
       if (result === 'win') {
         if (this.switchDemoActive) {
           this.switchDemoActive = false;
@@ -998,12 +1022,53 @@ class BotService {
 
   private scheduleFastStrategy() {
     if (this.fastInitialSent) return;
+    this.scheduleFastCandleLog();
     const timer = setTimeout(() => {
       this.maybeStartFastInitialBid().catch((err) => {
         this.emit('error', { message: `Fast initial bid failed: ${String(err)}` });
       });
     }, 0);
     this.signalTimers.push(timer);
+  }
+
+  private scheduleFastCandleLog() {
+    if (this.fastCandleLogScheduled) return;
+    this.fastCandleLogScheduled = true;
+    const scheduleNext = () => {
+      if (this.status !== 'running' || this.config.strategy !== 'Fast') {
+        this.fastCandleLogScheduled = false;
+        return;
+      }
+      const now = new Date();
+      const seconds = now.getSeconds();
+      const ms = now.getMilliseconds();
+      const secondsTo59 = (59 - seconds + 60) % 60;
+      let delay = secondsTo59 * 1000 - ms;
+      if (delay < 0) delay += 60000;
+      const timer = setTimeout(async () => {
+        if (this.status === 'running' && this.config.strategy === 'Fast') {
+          try {
+            const candles = await this.fetchCandles(this.config.asset, 60);
+            const last = candles[candles.length - 1];
+            if (last) {
+              const stamp = new Date().toTimeString().split(' ')[0];
+              const color =
+                last.close > last.open ? 'hijau' : last.close < last.open ? 'merah' : 'doji';
+              this.emit('log', {
+                message: `Fast candle @:59 ${stamp} ${color}`,
+              });
+            } else {
+              this.emit('log', { message: 'Fast candle @:59 no data' });
+            }
+          } catch (err) {
+            this.emit('error', { message: `Fast candle log failed: ${String(err)}` });
+          }
+        }
+        scheduleNext();
+      }, delay);
+      this.signalTimers.push(timer);
+    };
+    scheduleNext();
   }
 
   private scheduleSignalStrategy() {
@@ -1193,11 +1258,16 @@ class BotService {
       this.disableRepeatAfterDemo;
     let trendToSend = trend;
     if (this.config.strategy === 'Fast') {
-      const canRepeatFast = canRepeat && !isDemoMode;
-      if (canRepeatFast && this.lastSignalTrend) {
-        trendToSend = this.lastSignalTrend;
+      if (!isDemoMode && this.fastRepeatTrend) {
+        trendToSend = this.fastRepeatTrend;
+        this.lastSignalTrend = trendToSend;
       } else {
-        this.lastSignalTrend = trend;
+        const canRepeatFast = canRepeat && !isDemoMode;
+        if (canRepeatFast && this.lastSignalTrend) {
+          trendToSend = this.lastSignalTrend;
+        } else {
+          this.lastSignalTrend = trend;
+        }
       }
       this.lastFastBidTrend = trendToSend;
     } else if (canRepeat && this.lastSignalTrend) {
@@ -1698,6 +1768,11 @@ class BotService {
       if (!candle) return null;
       if (candle.close > candle.open) return 'call';
       if (candle.close < candle.open) return 'put';
+      const prev = candles[candles.length - 2];
+      if (prev) {
+        if (prev.close > prev.open) return 'call';
+        if (prev.close < prev.open) return 'put';
+      }
       return this.lastFastBidTrend ?? this.lastSignalTrend;
     }
 
@@ -1864,6 +1939,7 @@ class BotService {
       this.lastBidWasSwitchDemo = Boolean(state?.lastWasSwitchDemo);
       this.lastSignalTrend = state?.lastTrend ?? this.lastSignalTrend;
       this.lastFastBidTrend = this.lastSignalTrend;
+      this.fastRepeatTrend = null;
       this.lastBidAmount =
         Number.isFinite(state?.lastAmount) ? Number(state.lastAmount) : this.lastBidAmount;
     } catch {
